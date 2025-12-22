@@ -60,23 +60,33 @@ impl GpuContext {
     }
 
     /// Execute element-wise addition on GPU
+    /// Note: Currently delegates to CPU for scalar operations.
+    /// GPU acceleration is most effective for batched tensor operations,
+    /// which will be implemented in future versions.
     pub fn add(&self, a: f64, b: f64) -> f64 {
-        // For scalar operations, just use CPU
-        // GPU is beneficial for large tensor operations
         a + b
     }
 
     /// Execute element-wise multiplication on GPU
+    /// Note: Currently delegates to CPU for scalar operations.
+    /// GPU acceleration is most effective for batched tensor operations,
+    /// which will be implemented in future versions.
     pub fn mul(&self, a: f64, b: f64) -> f64 {
         a * b
     }
 
     /// Execute power operation on GPU
+    /// Note: Currently delegates to CPU for scalar operations.
+    /// GPU acceleration is most effective for batched tensor operations,
+    /// which will be implemented in future versions.
     pub fn pow(&self, base: f64, exp: f64) -> f64 {
         base.powf(exp)
     }
 
     /// Execute ReLU activation on GPU
+    /// Note: Currently delegates to CPU for scalar operations.
+    /// GPU acceleration is most effective for batched tensor operations,
+    /// which will be implemented in future versions.
     pub fn relu(&self, x: f64) -> f64 {
         if x < 0.0 { 0.0 } else { x }
     }

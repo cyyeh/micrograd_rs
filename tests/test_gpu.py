@@ -123,8 +123,8 @@ def test_mlp_with_device():
     assert len(params) > 0
     for p in params:
         assert p.device == Device.cpu()
-        # Gradient should be computed
-        assert p.grad != 0.0 or True  # Some gradients might be zero
+        # Gradient should exist (might be zero for some parameters)
+        assert hasattr(p, 'grad')
 
 
 def test_mixed_operations():

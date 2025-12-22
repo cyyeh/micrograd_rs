@@ -112,36 +112,37 @@ impl Value {
         }
     }
 
-    fn compute_on_device(device: Device, a: f64, b: f64, op_type: &str) -> f64 {
+    #[inline]
+    fn compute_add(device: Device, a: f64, b: f64) -> f64 {
         match device {
-            Device::Cpu => match op_type {
-                "add" => a + b,
-                "mul" => a * b,
-                _ => unreachable!(),
-            },
+            Device::Cpu => a + b,
             #[cfg(feature = "gpu")]
             Device::Gpu => {
                 if let Some(ctx) = crate::gpu::get_gpu_context() {
-                    match op_type {
-                        "add" => ctx.add(a, b),
-                        "mul" => ctx.mul(a, b),
-                        _ => unreachable!(),
-                    }
+                    ctx.add(a, b)
                 } else {
-                    // Fallback to CPU
-                    match op_type {
-                        "add" => a + b,
-                        "mul" => a * b,
-                        _ => unreachable!(),
-                    }
+                    a + b  // Fallback to CPU
                 }
             }
             #[cfg(not(feature = "gpu"))]
-            Device::Gpu => match op_type {
-                "add" => a + b,
-                "mul" => a * b,
-                _ => unreachable!(),
-            },
+            Device::Gpu => a + b,
+        }
+    }
+
+    #[inline]
+    fn compute_mul(device: Device, a: f64, b: f64) -> f64 {
+        match device {
+            Device::Cpu => a * b,
+            #[cfg(feature = "gpu")]
+            Device::Gpu => {
+                if let Some(ctx) = crate::gpu::get_gpu_context() {
+                    ctx.mul(a, b)
+                } else {
+                    a * b  // Fallback to CPU
+                }
+            }
+            #[cfg(not(feature = "gpu"))]
+            Device::Gpu => a * b,
         }
     }
 
@@ -149,7 +150,7 @@ impl Value {
         let self_inner = self.inner.borrow();
         let other_inner = other.inner.borrow();
         let device = self_inner.device;
-        let data = Self::compute_on_device(device, self_inner.data, other_inner.data, "add");
+        let data = Self::compute_add(device, self_inner.data, other_inner.data);
         drop(self_inner);
         drop(other_inner);
         let op = Op::Add(self.inner.clone(), other.inner.clone());
@@ -160,7 +161,7 @@ impl Value {
         let self_inner = self.inner.borrow();
         let other_inner = other.inner.borrow();
         let device = self_inner.device;
-        let data = Self::compute_on_device(device, self_inner.data, other_inner.data, "mul");
+        let data = Self::compute_mul(device, self_inner.data, other_inner.data);
         drop(self_inner);
         drop(other_inner);
         let op = Op::Mul(self.inner.clone(), other.inner.clone());
