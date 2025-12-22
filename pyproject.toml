@@ -36,4 +36,8 @@ maturin = ">=1.4,<2.0"
 pytest = "^8.0"
 torch = "^2.9.1"
 numpy = "^2.4.0"
+matplotlib = "^3.10.8"
+ipykernel = "^7.1.0"
+scikit-learn = "^1.8.0"
+graphviz = "^0.21"
 

@@ -144,13 +144,3 @@ micrograd_rs/
 - Implement topological sort for `backward()`
 
 ### Phase 3: Python Bindings for Value
-
-- Create `#[pyclass]` wrapper for Value
-- Implement `#[pymethods]` for all Python magic methods
-- Handle type coercion (Value + float, float + Value)
-
-### Phase 4: Neural Network Module
-
-- Implement `Module` trait with `zero_grad()` and `parameters()`
-- Implement `Neuron`, `Layer`, `MLP` structs
-- Expose as Python classes with `__call__` support

@@ -5,3 +5,4 @@ micrograd/
 __pycache__/
 *.so
 target/
+gout*

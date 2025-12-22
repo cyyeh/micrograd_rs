@@ -183,6 +183,29 @@ impl Value {
         self.inner.borrow_mut().grad = value;
     }
 
+    /// Get the previous nodes (children) in the computation graph
+    #[getter]
+    fn _prev(&self) -> Vec<Value> {
+        self.inner
+            .borrow()
+            .children()
+            .into_iter()
+            .map(|inner| Value::new_with_inner(inner))
+            .collect()
+    }
+
+    /// Get the operation that produced this node
+    #[getter]
+    fn _op(&self) -> String {
+        match &self.inner.borrow().op {
+            Op::None => String::new(),
+            Op::Add(_, _) => "+".to_string(),
+            Op::Mul(_, _) => "*".to_string(),
+            Op::Pow(_, exp) => format!("**{}", exp),
+            Op::ReLU(_) => "ReLU".to_string(),
+        }
+    }
+
     fn __repr__(&self) -> String {
         let inner = self.inner.borrow();
         format!("Value(data={}, grad={})", inner.data, inner.grad)
