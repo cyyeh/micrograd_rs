@@ -244,10 +244,6 @@ def test_device_transfer_maintains_graph():
     
     # Test with actual device transfer if GPU available
     if Device.is_gpu_available():
-        # Reset gradients
-        a.grad = 0.0
-        b.grad = 0.0
-        
         # Create new value and transfer to GPU
         x = Value(4.0, device=Device.cpu())
         x_gpu = x.to(Device.gpu())

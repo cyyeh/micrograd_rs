@@ -410,7 +410,10 @@ impl Value {
 
     /// Move this Value to a different device
     /// 
-    /// Note: This maintains the computational graph across device transfers.
+    /// This method maintains the computational graph across device transfers:
+    /// - Same device: Returns a reference to self (efficient, no new nodes)
+    /// - Different device: Creates a DeviceTransfer operation node
+    /// 
     /// Gradients will flow back through device transfers during backpropagation.
     fn to(&self, device: Device) -> Value {
         let current_device = self.inner.borrow().device;
