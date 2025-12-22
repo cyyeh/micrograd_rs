@@ -2,6 +2,7 @@ use pyo3::prelude::*;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
+use crate::device::Device;
 
 /// The operation that produced a Value node
 #[derive(Clone, Debug)]
@@ -19,6 +20,7 @@ pub struct ValueInner {
     pub data: f64,
     pub grad: f64,
     pub op: Op,
+    pub device: Device,
 }
 
 impl ValueInner {
@@ -27,14 +29,25 @@ impl ValueInner {
             data,
             grad: 0.0,
             op: Op::None,
+            device: Device::Cpu,
         }
     }
 
-    pub fn with_op(data: f64, op: Op) -> Self {
+    pub fn new_with_device(data: f64, device: Device) -> Self {
+        ValueInner {
+            data,
+            grad: 0.0,
+            op: Op::None,
+            device,
+        }
+    }
+
+    pub fn with_op(data: f64, op: Op, device: Device) -> Self {
         ValueInner {
             data,
             grad: 0.0,
             op,
+            device,
         }
     }
 
@@ -93,29 +106,108 @@ impl Value {
         }
     }
 
+    pub fn from_f64_with_device(data: f64, device: Device) -> Self {
+        Value {
+            inner: Rc::new(RefCell::new(ValueInner::new_with_device(data, device))),
+        }
+    }
+
+    fn compute_on_device(device: Device, a: f64, b: f64, op_type: &str) -> f64 {
+        match device {
+            Device::Cpu => match op_type {
+                "add" => a + b,
+                "mul" => a * b,
+                _ => unreachable!(),
+            },
+            #[cfg(feature = "gpu")]
+            Device::Gpu => {
+                if let Some(ctx) = crate::gpu::get_gpu_context() {
+                    match op_type {
+                        "add" => ctx.add(a, b),
+                        "mul" => ctx.mul(a, b),
+                        _ => unreachable!(),
+                    }
+                } else {
+                    // Fallback to CPU
+                    match op_type {
+                        "add" => a + b,
+                        "mul" => a * b,
+                        _ => unreachable!(),
+                    }
+                }
+            }
+            #[cfg(not(feature = "gpu"))]
+            Device::Gpu => match op_type {
+                "add" => a + b,
+                "mul" => a * b,
+                _ => unreachable!(),
+            },
+        }
+    }
+
     pub fn add(&self, other: &Value) -> Value {
-        let data = self.inner.borrow().data + other.inner.borrow().data;
+        let self_inner = self.inner.borrow();
+        let other_inner = other.inner.borrow();
+        let device = self_inner.device;
+        let data = Self::compute_on_device(device, self_inner.data, other_inner.data, "add");
+        drop(self_inner);
+        drop(other_inner);
         let op = Op::Add(self.inner.clone(), other.inner.clone());
-        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op))))
+        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op, device))))
     }
 
     pub fn mul(&self, other: &Value) -> Value {
-        let data = self.inner.borrow().data * other.inner.borrow().data;
+        let self_inner = self.inner.borrow();
+        let other_inner = other.inner.borrow();
+        let device = self_inner.device;
+        let data = Self::compute_on_device(device, self_inner.data, other_inner.data, "mul");
+        drop(self_inner);
+        drop(other_inner);
         let op = Op::Mul(self.inner.clone(), other.inner.clone());
-        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op))))
+        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op, device))))
     }
 
     pub fn pow_f64(&self, exp: f64) -> Value {
-        let data = self.inner.borrow().data.powf(exp);
+        let self_inner = self.inner.borrow();
+        let device = self_inner.device;
+        let data = match device {
+            Device::Cpu => self_inner.data.powf(exp),
+            #[cfg(feature = "gpu")]
+            Device::Gpu => {
+                if let Some(ctx) = crate::gpu::get_gpu_context() {
+                    ctx.pow(self_inner.data, exp)
+                } else {
+                    self_inner.data.powf(exp)
+                }
+            }
+            #[cfg(not(feature = "gpu"))]
+            Device::Gpu => self_inner.data.powf(exp),
+        };
+        drop(self_inner);
         let op = Op::Pow(self.inner.clone(), exp);
-        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op))))
+        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op, device))))
     }
 
     pub fn relu_value(&self) -> Value {
-        let input_data = self.inner.borrow().data;
-        let data = if input_data < 0.0 { 0.0 } else { input_data };
+        let self_inner = self.inner.borrow();
+        let device = self_inner.device;
+        let input_data = self_inner.data;
+        let data = match device {
+            Device::Cpu => if input_data < 0.0 { 0.0 } else { input_data },
+            #[cfg(feature = "gpu")]
+            Device::Gpu => {
+                if let Some(ctx) = crate::gpu::get_gpu_context() {
+                    ctx.relu(input_data)
+                } else {
+                    if input_data < 0.0 { 0.0 } else { input_data }
+                }
+            }
+            #[cfg(not(feature = "gpu"))]
+            Device::Gpu => if input_data < 0.0 { 0.0 } else { input_data },
+        };
+        drop(self_inner);
         let op = Op::ReLU(self.inner.clone());
-        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op))))
+        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op, device))))
     }
 
     /// Build topological order of all nodes in the graph
@@ -159,8 +251,12 @@ impl Value {
 #[pymethods]
 impl Value {
     #[new]
-    fn py_new(data: f64) -> Self {
-        Value::from_f64(data)
+    #[pyo3(signature = (data, device=None))]
+    fn py_new(data: f64, device: Option<Device>) -> Self {
+        match device {
+            Some(dev) => Value::from_f64_with_device(data, dev),
+            None => Value::from_f64(data),
+        }
     }
 
     #[getter]
@@ -181,6 +277,11 @@ impl Value {
     #[setter]
     fn set_grad(&self, value: f64) {
         self.inner.borrow_mut().grad = value;
+    }
+
+    #[getter]
+    fn device(&self) -> Device {
+        self.inner.borrow().device
     }
 
     /// Get the previous nodes (children) in the computation graph
@@ -212,9 +313,10 @@ impl Value {
     }
 
     fn __add__(&self, other: ValueOrFloat) -> Value {
+        let device = self.inner.borrow().device;
         match other {
             ValueOrFloat::Value(v) => self.add(&v),
-            ValueOrFloat::Float(f) => self.add(&Value::from_f64(f)),
+            ValueOrFloat::Float(f) => self.add(&Value::from_f64_with_device(f, device)),
         }
     }
 
@@ -223,9 +325,10 @@ impl Value {
     }
 
     fn __mul__(&self, other: ValueOrFloat) -> Value {
+        let device = self.inner.borrow().device;
         match other {
             ValueOrFloat::Value(v) => self.mul(&v),
-            ValueOrFloat::Float(f) => self.mul(&Value::from_f64(f)),
+            ValueOrFloat::Float(f) => self.mul(&Value::from_f64_with_device(f, device)),
         }
     }
 
@@ -238,37 +341,42 @@ impl Value {
     }
 
     fn __neg__(&self) -> Value {
-        self.mul(&Value::from_f64(-1.0))
+        let device = self.inner.borrow().device;
+        self.mul(&Value::from_f64_with_device(-1.0, device))
     }
 
     fn __sub__(&self, other: ValueOrFloat) -> Value {
+        let device = self.inner.borrow().device;
         let neg_other = match other {
             ValueOrFloat::Value(v) => v.__neg__(),
-            ValueOrFloat::Float(f) => Value::from_f64(-f),
+            ValueOrFloat::Float(f) => Value::from_f64_with_device(-f, device),
         };
         self.add(&neg_other)
     }
 
     fn __rsub__(&self, other: ValueOrFloat) -> Value {
+        let device = self.inner.borrow().device;
         let neg_self = self.__neg__();
         match other {
             ValueOrFloat::Value(v) => v.add(&neg_self),
-            ValueOrFloat::Float(f) => Value::from_f64(f).add(&neg_self),
+            ValueOrFloat::Float(f) => Value::from_f64_with_device(f, device).add(&neg_self),
         }
     }
 
     fn __truediv__(&self, other: ValueOrFloat) -> Value {
+        let device = self.inner.borrow().device;
         match other {
             ValueOrFloat::Value(v) => self.mul(&v.pow_f64(-1.0)),
-            ValueOrFloat::Float(f) => self.mul(&Value::from_f64(f).pow_f64(-1.0)),
+            ValueOrFloat::Float(f) => self.mul(&Value::from_f64_with_device(f, device).pow_f64(-1.0)),
         }
     }
 
     fn __rtruediv__(&self, other: ValueOrFloat) -> Value {
+        let device = self.inner.borrow().device;
         let inv_self = self.pow_f64(-1.0);
         match other {
             ValueOrFloat::Value(v) => v.mul(&inv_self),
-            ValueOrFloat::Float(f) => Value::from_f64(f).mul(&inv_self),
+            ValueOrFloat::Float(f) => Value::from_f64_with_device(f, device).mul(&inv_self),
         }
     }
 
@@ -278,6 +386,19 @@ impl Value {
 
     fn backward(&self) {
         self.backward_value();
+    }
+
+    /// Move this Value to a different device
+    fn to(&self, device: Device) -> Value {
+        let current_device = self.inner.borrow().device;
+        if current_device == device {
+            // Already on the target device, return self
+            self.clone()
+        } else {
+            // Create a new Value on the target device
+            let data = self.inner.borrow().data;
+            Value::from_f64_with_device(data, device)
+        }
     }
 }
 

@@ -2,6 +2,7 @@ use pyo3::prelude::*;
 use rand::Rng;
 
 use crate::value::Value;
+use crate::device::Device;
 
 /// A single neuron with weights and bias
 #[pyclass(unsendable)]
@@ -10,23 +11,26 @@ pub struct Neuron {
     weights: Vec<Value>,
     bias: Value,
     nonlin: bool,
+    device: Device,
 }
 
 #[pymethods]
 impl Neuron {
     #[new]
-    #[pyo3(signature = (nin, nonlin=true))]
-    fn new(nin: usize, nonlin: bool) -> Self {
+    #[pyo3(signature = (nin, nonlin=true, device=None))]
+    fn new(nin: usize, nonlin: bool, device: Option<Device>) -> Self {
+        let device = device.unwrap_or(Device::Cpu);
         let mut rng = rand::thread_rng();
         let weights: Vec<Value> = (0..nin)
-            .map(|_| Value::from_f64(rng.gen_range(-1.0..1.0)))
+            .map(|_| Value::from_f64_with_device(rng.gen_range(-1.0..1.0), device))
             .collect();
-        let bias = Value::from_f64(0.0);
+        let bias = Value::from_f64_with_device(0.0, device);
         
         Neuron {
             weights,
             bias,
             nonlin,
+            device,
         }
     }
 
@@ -68,18 +72,20 @@ impl Neuron {
 #[derive(Clone)]
 pub struct Layer {
     neurons: Vec<Neuron>,
+    device: Device,
 }
 
 #[pymethods]
 impl Layer {
     #[new]
-    #[pyo3(signature = (nin, nout, nonlin=true))]
-    fn new(nin: usize, nout: usize, nonlin: bool) -> Self {
+    #[pyo3(signature = (nin, nout, nonlin=true, device=None))]
+    fn new(nin: usize, nout: usize, nonlin: bool, device: Option<Device>) -> Self {
+        let device = device.unwrap_or(Device::Cpu);
         let neurons: Vec<Neuron> = (0..nout)
-            .map(|_| Neuron::new(nin, nonlin))
+            .map(|_| Neuron::new(nin, nonlin, Some(device)))
             .collect();
         
-        Layer { neurons }
+        Layer { neurons, device }
     }
 
     fn __call__(&self, x: Vec<Value>) -> PyResult<PyObject> {
@@ -121,12 +127,15 @@ impl Layer {
 #[derive(Clone)]
 pub struct MLP {
     layers: Vec<Layer>,
+    device: Device,
 }
 
 #[pymethods]
 impl MLP {
     #[new]
-    fn new(nin: usize, nouts: Vec<usize>) -> Self {
+    #[pyo3(signature = (nin, nouts, device=None))]
+    fn new(nin: usize, nouts: Vec<usize>, device: Option<Device>) -> Self {
+        let device = device.unwrap_or(Device::Cpu);
         let mut sz = vec![nin];
         sz.extend(nouts.clone());
         
@@ -134,11 +143,11 @@ impl MLP {
             .map(|i| {
                 // Last layer is linear (no nonlinearity)
                 let nonlin = i != nouts.len() - 1;
-                Layer::new(sz[i], sz[i + 1], nonlin)
+                Layer::new(sz[i], sz[i + 1], nonlin, Some(device))
             })
             .collect();
         
-        MLP { layers }
+        MLP { layers, device }
     }
 
     fn __call__(&self, x: Vec<Value>) -> PyResult<PyObject> {
