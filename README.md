@@ -38,7 +38,7 @@ print(f'{b.grad:.4f}')  # prints 645.5773
 ## Neural Networks
 
 ```python
-from micrograd_rs import Value, Neuron, Layer, MLP
+from micrograd_rs import Value, MLP
 
 # Create a simple MLP
 model = MLP(3, [4, 4, 1])
@@ -58,6 +58,6 @@ for p in model.parameters():
 ## Running Tests
 
 ```bash
-poetry run pytest tests/
+poetry run pytest
 ```
 
