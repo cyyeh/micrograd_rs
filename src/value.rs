@@ -12,6 +12,7 @@ pub enum Op {
     Mul(Rc<RefCell<ValueInner>>, Rc<RefCell<ValueInner>>),
     Pow(Rc<RefCell<ValueInner>>, f64),
     ReLU(Rc<RefCell<ValueInner>>),
+    DeviceTransfer(Rc<RefCell<ValueInner>>),
 }
 
 /// Inner value storing the actual data and gradient
@@ -74,6 +75,10 @@ impl ValueInner {
                     input.borrow_mut().grad += self.grad;
                 }
             }
+            Op::DeviceTransfer(input) => {
+                // For device transfer, gradient flows through unchanged
+                input.borrow_mut().grad += self.grad;
+            }
         }
     }
 
@@ -84,6 +89,7 @@ impl ValueInner {
             Op::Add(left, right) | Op::Mul(left, right) => vec![left.clone(), right.clone()],
             Op::Pow(base, _) => vec![base.clone()],
             Op::ReLU(input) => vec![input.clone()],
+            Op::DeviceTransfer(input) => vec![input.clone()],
         }
     }
 }
@@ -317,6 +323,7 @@ impl Value {
             Op::Mul(_, _) => "*".to_string(),
             Op::Pow(_, exp) => format!("**{}", exp),
             Op::ReLU(_) => "ReLU".to_string(),
+            Op::DeviceTransfer(_) => "to_device".to_string(),
         }
     }
 
@@ -403,22 +410,22 @@ impl Value {
 
     /// Move this Value to a different device
     /// 
-    /// Note: This creates a new leaf node with only the data value, breaking the
-    /// computational graph. If you need gradients to flow through device transfers,
-    /// ensure all values are on the same device before starting computation.
+    /// Note: This maintains the computational graph across device transfers.
+    /// Gradients will flow back through device transfers during backpropagation.
     fn to(&self, device: Device) -> Value {
         let current_device = self.inner.borrow().device;
         if current_device == device {
-            // Already on the target device, return a reference to self without cloning
-            // We return self directly to avoid unnecessary cloning
+            // Already on the target device, return a reference to self
             return Value {
                 inner: self.inner.clone(),
             };
         }
         
-        // Create a new leaf Value on the target device (breaks computational graph)
+        // Create a new Value on the target device with DeviceTransfer operation
+        // This maintains the computational graph so gradients can flow back
         let data = self.inner.borrow().data;
-        Value::from_f64_with_device(data, device)
+        let op = Op::DeviceTransfer(self.inner.clone());
+        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op, device))))
     }
 }
 

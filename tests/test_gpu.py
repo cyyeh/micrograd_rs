@@ -223,5 +223,46 @@ def test_gradient_accumulation():
     assert b.grad == a.data  # d(a*b + a)/db = a
 
 
+def test_device_transfer_maintains_graph():
+    """Test that .to() maintains computational graph for gradient flow."""
+    # Create value on CPU
+    a = Value(2.0, device=Device.cpu())
+    b = Value(3.0, device=Device.cpu())
+    
+    # Perform operation
+    c = a * b
+    
+    # Transfer to same device (should return reference, not break graph)
+    c_transferred = c.to(Device.cpu())
+    
+    # Backward should work through transfer
+    c_transferred.backward()
+    
+    # Check gradients flow back to original values
+    assert a.grad == 3.0  # dc/da = b
+    assert b.grad == 2.0  # dc/db = a
+    
+    # Test with actual device transfer if GPU available
+    if Device.is_gpu_available():
+        # Reset gradients
+        a.grad = 0.0
+        b.grad = 0.0
+        
+        # Create new value and transfer to GPU
+        x = Value(4.0, device=Device.cpu())
+        x_gpu = x.to(Device.gpu())
+        
+        # Operate on GPU
+        y_gpu = Value(5.0, device=Device.gpu())
+        z = x_gpu * y_gpu
+        
+        # Backward
+        z.backward()
+        
+        # Gradient should flow back through device transfer
+        assert x.grad == 5.0  # dz/dx = y
+        assert y_gpu.grad == 4.0  # dz/dy = x
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
