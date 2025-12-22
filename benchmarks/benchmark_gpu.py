@@ -56,7 +56,7 @@ def test_mlp_forward(device, input_size=10, hidden_sizes=[20, 20], iterations=10
     start = time.time()
     for _ in range(iterations):
         x = [Value(float(i), device=device) for i in range(input_size)]
-        y = model(x)
+        model(x)
     elapsed = time.time() - start
     
     return elapsed / iterations * 1000  # Convert to milliseconds
@@ -175,14 +175,21 @@ def run_benchmarks():
     
     # Performance comparison
     if len(devices) > 1:
-        print("\nPerformance Comparison (CPU baseline)")
+        print("\nPerformance Comparison")
         print("-" * 80)
         
         for op_name in results:
             cpu_time = results[op_name]["CPU"]
             gpu_time = results[op_name]["GPU"]
-            speedup = cpu_time / gpu_time if gpu_time > 0 else 0
-            print(f"{op_name:<20} Speedup: {speedup:.2f}x")
+            if gpu_time > 0:
+                speedup = cpu_time / gpu_time
+                if speedup >= 1.0:
+                    print(f"{op_name:<20} CPU: {cpu_time:>8.4f}ms, GPU: {gpu_time:>8.4f}ms ({speedup:.2f}x faster)")
+                else:
+                    slowdown = gpu_time / cpu_time
+                    print(f"{op_name:<20} CPU: {cpu_time:>8.4f}ms, GPU: {gpu_time:>8.4f}ms ({slowdown:.2f}x slower)")
+            else:
+                print(f"{op_name:<20} CPU: {cpu_time:>8.4f}ms, GPU: N/A")
         
         print()
         for config_name in nn_results:
@@ -192,8 +199,15 @@ def run_benchmarks():
                 gpu_key = f"GPU_{phase}"
                 cpu_time = nn_results[config_name][cpu_key]
                 gpu_time = nn_results[config_name][gpu_key]
-                speedup = cpu_time / gpu_time if gpu_time > 0 else 0
-                print(f"  {phase.capitalize():>15}: {speedup:.2f}x speedup")
+                if gpu_time > 0:
+                    speedup = cpu_time / gpu_time
+                    if speedup >= 1.0:
+                        print(f"  {phase.capitalize():>15}: CPU: {cpu_time:>8.4f}ms, GPU: {gpu_time:>8.4f}ms ({speedup:.2f}x faster)")
+                    else:
+                        slowdown = gpu_time / cpu_time
+                        print(f"  {phase.capitalize():>15}: CPU: {cpu_time:>8.4f}ms, GPU: {gpu_time:>8.4f}ms ({slowdown:.2f}x slower)")
+                else:
+                    print(f"  {phase.capitalize():>15}: CPU: {cpu_time:>8.4f}ms, GPU: N/A")
         
         print()
         print("=" * 80)

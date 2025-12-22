@@ -139,7 +139,7 @@ Example output (performance will vary based on hardware):
 micrograd_rs Performance Benchmarks
 ================================================================================
 
-GPU Available: True
+GPU Available: True  # Note: Depends on your system configuration
 
 Basic Operations (average time per operation, 1000 iterations)
 --------------------------------------------------------------------------------
@@ -150,7 +150,10 @@ Multiplication            0.0006 ms      0.0004 ms
 ...
 ```
 
-**Note**: For scalar operations (single values), GPU overhead may exceed compute time. GPU acceleration is most effective for large-scale tensor operations and neural networks.
+**Note**: 
+- GPU availability depends on your system configuration (hardware, drivers, etc.)
+- For scalar operations (single values), GPU overhead may exceed compute time
+- GPU acceleration is most effective for large-scale tensor operations and neural networks
 
 ## Architecture
 

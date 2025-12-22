@@ -162,5 +162,66 @@ def test_gpu_fallback():
     assert result.device == Device.cpu()
 
 
+def test_mixed_device_operations():
+    """Test that operations between values on different devices raise an error."""
+    v_cpu = Value(2.0, device=Device.cpu())
+    
+    # If GPU is available, test mixed device operations
+    if Device.is_gpu_available():
+        v_gpu = Value(3.0, device=Device.gpu())
+        
+        # Operations between CPU and GPU values should raise an error
+        with pytest.raises(Exception) as exc_info:
+            result = v_cpu + v_gpu
+        
+        assert "different devices" in str(exc_info.value).lower()
+        
+        # Verify we can transfer and then operate
+        v_cpu2 = v_gpu.to(Device.cpu())
+        result = v_cpu + v_cpu2  # Should work now
+        assert result.device == Device.cpu()
+    else:
+        # If no GPU, just verify CPU operations work
+        v_cpu2 = Value(3.0, device=Device.cpu())
+        result = v_cpu + v_cpu2
+        assert result.device == Device.cpu()
+
+
+def test_gradient_accumulation():
+    """Test that gradient accumulation works correctly with devices."""
+    device = Device.cpu()
+    
+    # Create values
+    a = Value(2.0, device=device)
+    b = Value(3.0, device=device)
+    
+    # First computation
+    c = a * b
+    c.backward()
+    
+    # Store first gradients
+    first_grad_a = a.grad
+    first_grad_b = b.grad
+    
+    # Second computation without zeroing (gradient accumulation)
+    d = a + b
+    d.backward()
+    
+    # Gradients should accumulate
+    assert a.grad == first_grad_a + 1.0  # Gradient from second backward
+    assert b.grad == first_grad_b + 1.0  # Gradient from second backward
+    
+    # Now zero and verify
+    a.grad = 0.0
+    b.grad = 0.0
+    
+    e = a * b + a
+    e.backward()
+    
+    # Check fresh gradients
+    assert a.grad == b.data + 1.0  # d(a*b + a)/da = b + 1
+    assert b.grad == a.data  # d(a*b + a)/db = a
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

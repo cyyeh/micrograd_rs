@@ -94,20 +94,16 @@ impl GpuContext {
 
 #[cfg(feature = "gpu")]
 thread_local! {
-    static GPU_CONTEXT: std::cell::RefCell<Option<GpuContext>> = std::cell::RefCell::new(None);
+    static GPU_CONTEXT: std::cell::RefCell<Option<Arc<GpuContext>>> = std::cell::RefCell::new(None);
 }
 
 #[cfg(feature = "gpu")]
-pub fn get_gpu_context() -> Option<GpuContext> {
+pub fn get_gpu_context() -> Option<Arc<GpuContext>> {
     GPU_CONTEXT.with(|ctx| {
         let mut ctx_ref = ctx.borrow_mut();
         if ctx_ref.is_none() {
-            *ctx_ref = GpuContext::new();
+            *ctx_ref = GpuContext::new().map(Arc::new);
         }
-        // Since GpuContext contains Arc, we can clone it cheaply
-        ctx_ref.as_ref().map(|c| GpuContext {
-            device: c.device.clone(),
-            queue: c.queue.clone(),
-        })
+        ctx_ref.clone()
     })
 }

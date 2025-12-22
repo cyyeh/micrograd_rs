@@ -150,9 +150,16 @@ impl Value {
         let self_inner = self.inner.borrow();
         let other_inner = other.inner.borrow();
         let device = self_inner.device;
+        
+        // Validate both operands are on the same device
+        if device != other_inner.device {
+            panic!(
+                "Cannot perform operation on values from different devices: {:?} and {:?}. Use .to() to move values to the same device.",
+                device, other_inner.device
+            );
+        }
+        
         let data = Self::compute_add(device, self_inner.data, other_inner.data);
-        drop(self_inner);
-        drop(other_inner);
         let op = Op::Add(self.inner.clone(), other.inner.clone());
         Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op, device))))
     }
@@ -161,9 +168,16 @@ impl Value {
         let self_inner = self.inner.borrow();
         let other_inner = other.inner.borrow();
         let device = self_inner.device;
+        
+        // Validate both operands are on the same device
+        if device != other_inner.device {
+            panic!(
+                "Cannot perform operation on values from different devices: {:?} and {:?}. Use .to() to move values to the same device.",
+                device, other_inner.device
+            );
+        }
+        
         let data = Self::compute_mul(device, self_inner.data, other_inner.data);
-        drop(self_inner);
-        drop(other_inner);
         let op = Op::Mul(self.inner.clone(), other.inner.clone());
         Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op, device))))
     }
@@ -184,7 +198,6 @@ impl Value {
             #[cfg(not(feature = "gpu"))]
             Device::Gpu => self_inner.data.powf(exp),
         };
-        drop(self_inner);
         let op = Op::Pow(self.inner.clone(), exp);
         Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op, device))))
     }
@@ -206,7 +219,6 @@ impl Value {
             #[cfg(not(feature = "gpu"))]
             Device::Gpu => if input_data < 0.0 { 0.0 } else { input_data },
         };
-        drop(self_inner);
         let op = Op::ReLU(self.inner.clone());
         Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op, device))))
     }
@@ -390,16 +402,23 @@ impl Value {
     }
 
     /// Move this Value to a different device
+    /// 
+    /// Note: This creates a new leaf node with only the data value, breaking the
+    /// computational graph. If you need gradients to flow through device transfers,
+    /// ensure all values are on the same device before starting computation.
     fn to(&self, device: Device) -> Value {
         let current_device = self.inner.borrow().device;
         if current_device == device {
-            // Already on the target device, return self
-            self.clone()
-        } else {
-            // Create a new Value on the target device
-            let data = self.inner.borrow().data;
-            Value::from_f64_with_device(data, device)
+            // Already on the target device, return a reference to self without cloning
+            // We return self directly to avoid unnecessary cloning
+            return Value {
+                inner: self.inner.clone(),
+            };
         }
+        
+        // Create a new leaf Value on the target device (breaks computational graph)
+        let data = self.inner.borrow().data;
+        Value::from_f64_with_device(data, device)
     }
 }
 
