@@ -24,7 +24,7 @@ module-name = "micrograd_rs._micrograd_rs"
 name = "micrograd_rs"
 version = "0.1.0"
 description = "A tiny autograd engine implemented in Rust with Python bindings"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["ChihYu Yeh<chihyu.jimmy.yeh@gmail.com>"]
 readme = "README.md"
 package-mode = false
 
