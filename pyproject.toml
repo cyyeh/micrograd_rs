@@ -1,0 +1,39 @@
+[build-system]
+requires = ["maturin>=1.4,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "micrograd_rs"
+version = "0.1.0"
+description = "A tiny autograd engine implemented in Rust with Python bindings"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
+]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+python-source = "python"
+module-name = "micrograd_rs._micrograd_rs"
+
+[tool.poetry]
+name = "micrograd_rs"
+version = "0.1.0"
+description = "A tiny autograd engine implemented in Rust with Python bindings"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.13"
+maturin = ">=1.4,<2.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+torch = "^2.9.1"
+numpy = "^2.4.0"
+

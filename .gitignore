@@ -1,0 +1,7 @@
+.DS_Store
+.venv
+.pytest_cache
+micrograd/
+__pycache__/
+*.so
+target/
