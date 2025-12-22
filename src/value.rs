@@ -333,6 +333,8 @@ impl Value {
     }
 
     fn __add__(&self, other: ValueOrFloat) -> Value {
+        // Extract device early (Copy type) so we can use it for float conversion
+        // without holding a borrow on self.inner when calling self.add()
         let device = self.inner.borrow().device;
         match other {
             ValueOrFloat::Value(v) => self.add(&v),
@@ -345,6 +347,7 @@ impl Value {
     }
 
     fn __mul__(&self, other: ValueOrFloat) -> Value {
+        // Extract device early to avoid holding borrow when calling self.mul()
         let device = self.inner.borrow().device;
         match other {
             ValueOrFloat::Value(v) => self.mul(&v),
@@ -361,11 +364,13 @@ impl Value {
     }
 
     fn __neg__(&self) -> Value {
+        // Extract device for creating the -1.0 Value on the same device
         let device = self.inner.borrow().device;
         self.mul(&Value::from_f64_with_device(-1.0, device))
     }
 
     fn __sub__(&self, other: ValueOrFloat) -> Value {
+        // Extract device early to ensure float values are created on the correct device
         let device = self.inner.borrow().device;
         let neg_other = match other {
             ValueOrFloat::Value(v) => v.__neg__(),
@@ -375,6 +380,7 @@ impl Value {
     }
 
     fn __rsub__(&self, other: ValueOrFloat) -> Value {
+        // Extract device for float-to-Value conversion
         let device = self.inner.borrow().device;
         let neg_self = self.__neg__();
         match other {
@@ -384,6 +390,7 @@ impl Value {
     }
 
     fn __truediv__(&self, other: ValueOrFloat) -> Value {
+        // Extract device to create float Values on the correct device
         let device = self.inner.borrow().device;
         match other {
             ValueOrFloat::Value(v) => self.mul(&v.pow_f64(-1.0)),
@@ -392,6 +399,7 @@ impl Value {
     }
 
     fn __rtruediv__(&self, other: ValueOrFloat) -> Value {
+        // Extract device for float conversion
         let device = self.inner.borrow().device;
         let inv_self = self.pow_f64(-1.0);
         match other {
