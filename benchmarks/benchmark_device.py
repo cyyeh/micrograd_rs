@@ -141,9 +141,9 @@ def print_results_table(cpu_results: dict, cuda_results: dict = None):
         print("-" * 70)
         for op in cpu_results:
             cpu_time = cpu_results[op]
-            cuda_time = cuda_results.get(op, 0)
-            if cuda_time > 0:
-                speedup = cpu_time / cuda_time
+            cuda_time = cuda_results.get(op)
+            if cuda_time is not None:
+                speedup = cpu_time / cuda_time if cuda_time > 0 else float('inf')
                 print(f"{op:<25} {cpu_time:<15.4f} {cuda_time:<15.4f} {speedup:<15.2f}x")
             else:
                 print(f"{op:<25} {cpu_time:<15.4f} {'N/A':<15} {'N/A':<15}")
@@ -197,9 +197,9 @@ def main():
     # Summary
     print("\nNotes:")
     print("- Times are in milliseconds (ms)")
-    print("- Speedup > 1.0 means CUDA is faster")
-    print("- Current implementation uses CPU ops for scalar values")
-    print("- GPU acceleration benefits appear with batch/tensor operations")
+    print("- Speedup > 1.0 means CUDA is faster than CPU")
+    print("- For scalar operations, CPU and CUDA have similar performance")
+    print("- True GPU acceleration benefits appear with batched tensor operations")
     if not cuda_available:
         print("- CUDA benchmarks skipped (no CUDA device available)")
 
