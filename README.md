@@ -107,3 +107,20 @@ for p in model.parameters():
 poetry run pytest
 ```
 
+## Benchmarks
+
+To compare CPU vs GPU performance:
+
+```bash
+poetry run python benchmarks/benchmark_device.py
+```
+
+The benchmark script measures various operations including:
+- Basic arithmetic (add, mul, pow, relu)
+- Chained operations
+- Backward pass
+- Complex expressions
+
+When CUDA is available, it compares CPU and GPU performance and shows speedup ratios.
+
+
