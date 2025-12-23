@@ -110,8 +110,8 @@ impl Device {
 /// Check if CUDA is available on the system
 #[cfg(feature = "cuda")]
 pub fn is_cuda_available() -> bool {
-    use cudarc::driver::CudaDevice;
-    CudaDevice::new(0).is_ok()
+    use cudarc::driver::CudaContext;
+    CudaContext::new(0).is_ok()
 }
 
 #[cfg(feature = "cuda")]
@@ -122,19 +122,20 @@ pub mod cuda_ops {
     //! as they are faster for single values. GPU acceleration becomes beneficial
     //! for batch/tensor operations which could be added in future versions.
     
-    use cudarc::driver::CudaDevice;
+    use cudarc::driver::CudaContext;
     use std::sync::Arc;
 
     /// CUDA context holder for GPU operations
-    pub struct CudaContext {
-        pub device: Arc<CudaDevice>,
+    #[allow(dead_code)]
+    pub struct CudaContextHolder {
+        pub context: Arc<CudaContext>,
     }
 
-    impl CudaContext {
+    impl CudaContextHolder {
         /// Create a new CUDA context on device 0
         pub fn new() -> Result<Self, cudarc::driver::DriverError> {
-            let device = CudaDevice::new(0)?;
-            Ok(CudaContext { device })
+            let context = CudaContext::new(0)?;
+            Ok(CudaContextHolder { context })
         }
 
         /// Perform addition: result = a + b
@@ -162,17 +163,18 @@ pub mod cuda_ops {
         }
     }
 
-    /// Thread-local CUDA context for efficiency
+    // Thread-local CUDA context for efficiency
     thread_local! {
-        static CUDA_CTX: std::cell::RefCell<Option<CudaContext>> = const { std::cell::RefCell::new(None) };
+        static CUDA_CTX: std::cell::RefCell<Option<CudaContextHolder>> = const { std::cell::RefCell::new(None) };
     }
 
     /// Get or initialize the thread-local CUDA context
+    #[allow(dead_code)]
     pub fn get_cuda_context() -> Result<(), cudarc::driver::DriverError> {
         CUDA_CTX.with(|ctx| {
             let mut ctx = ctx.borrow_mut();
             if ctx.is_none() {
-                *ctx = Some(CudaContext::new()?);
+                *ctx = Some(CudaContextHolder::new()?);
             }
             Ok(())
         })
@@ -181,12 +183,12 @@ pub mod cuda_ops {
     /// Execute a CUDA operation using the thread-local context
     pub fn with_cuda_context<F, R>(f: F) -> Result<R, cudarc::driver::DriverError>
     where
-        F: FnOnce(&CudaContext) -> Result<R, cudarc::driver::DriverError>,
+        F: FnOnce(&CudaContextHolder) -> Result<R, cudarc::driver::DriverError>,
     {
         CUDA_CTX.with(|ctx| {
             let mut ctx_ref = ctx.borrow_mut();
             if ctx_ref.is_none() {
-                *ctx_ref = Some(CudaContext::new()?);
+                *ctx_ref = Some(CudaContextHolder::new()?);
             }
             f(ctx_ref.as_ref().unwrap())
         })
