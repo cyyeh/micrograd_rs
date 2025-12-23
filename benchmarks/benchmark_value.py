@@ -1,8 +1,8 @@
 """
-Benchmarks comparing CPU vs GPU performance for micrograd_rs.
-These benchmarks measure the performance of various operations on different devices.
+Benchmarks for Scalar Value CPU vs CUDA.
 
-Run with: python benchmarks/benchmark_device.py
+Run with:
+  poetry run python benchmarks/benchmark_value.py
 """
 
 import time

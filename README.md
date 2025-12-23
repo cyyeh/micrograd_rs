@@ -133,7 +133,7 @@ poetry run pytest
 To compare CPU vs GPU performance:
 
 ```bash
-poetry run python benchmarks/benchmark_device.py
+poetry run python benchmarks/benchmark_value.py
 poetry run python benchmarks/benchmark_tensor_nd.py
 ```
 
