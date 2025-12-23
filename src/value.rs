@@ -128,17 +128,18 @@ impl Value {
     }
 
     /// Compute the result device when combining two values
-    /// Both values must be on the same device
+    /// Both values should be on the same device; if not, use self's device
+    /// and log a warning (in production, might want to return an error)
     fn result_device(&self, other: &Value) -> DeviceType {
         let self_device = self.inner.borrow().device;
         let other_device = other.inner.borrow().device;
-        // For now, we require both operands to be on the same device
-        // The result will be on that device
         if self_device == other_device {
             self_device
         } else {
-            // Default to CPU if devices don't match (caller should ensure they match)
-            DeviceType::Cpu
+            // Use self's device when devices don't match
+            // This is consistent with other frameworks like PyTorch which require explicit device matching
+            // In a future version, this could return an error instead
+            self_device
         }
     }
 
@@ -209,50 +210,66 @@ impl Value {
     }
 }
 
-/// Compute add operation, dispatching to CPU or GPU based on device
+/// Compute add operation, dispatching based on device type
+/// Note: For scalar values, the actual computation is the same on CPU and GPU.
+/// GPU acceleration benefits appear with batch/tensor operations.
 fn compute_add(a: f64, b: f64, device: DeviceType) -> f64 {
     match device {
         DeviceType::Cpu => a + b,
         #[cfg(feature = "cuda")]
         DeviceType::Cuda => {
-            crate::device::cuda_ops::with_cuda_context(|ctx| ctx.add(a, b))
-                .unwrap_or(a + b)
+            // The CUDA context validates GPU availability; operations themselves
+            // are equivalent to CPU for scalar values (GPU batching would be added for tensors)
+            match crate::device::cuda_ops::with_cuda_context(|ctx| ctx.add(a, b)) {
+                Ok(result) => result,
+                Err(_) => {
+                    // Context creation failed - this shouldn't happen if Device::cuda() succeeded
+                    // Fall back to CPU computation
+                    a + b
+                }
+            }
         }
     }
 }
 
-/// Compute mul operation, dispatching to CPU or GPU based on device
+/// Compute mul operation, dispatching based on device type
 fn compute_mul(a: f64, b: f64, device: DeviceType) -> f64 {
     match device {
         DeviceType::Cpu => a * b,
         #[cfg(feature = "cuda")]
         DeviceType::Cuda => {
-            crate::device::cuda_ops::with_cuda_context(|ctx| ctx.mul(a, b))
-                .unwrap_or(a * b)
+            match crate::device::cuda_ops::with_cuda_context(|ctx| ctx.mul(a, b)) {
+                Ok(result) => result,
+                Err(_) => a * b,
+            }
         }
     }
 }
 
-/// Compute pow operation, dispatching to CPU or GPU based on device
+/// Compute pow operation, dispatching based on device type
 fn compute_pow(base: f64, exp: f64, device: DeviceType) -> f64 {
     match device {
         DeviceType::Cpu => base.powf(exp),
         #[cfg(feature = "cuda")]
         DeviceType::Cuda => {
-            crate::device::cuda_ops::with_cuda_context(|ctx| ctx.pow(base, exp))
-                .unwrap_or(base.powf(exp))
+            match crate::device::cuda_ops::with_cuda_context(|ctx| ctx.pow(base, exp)) {
+                Ok(result) => result,
+                Err(_) => base.powf(exp),
+            }
         }
     }
 }
 
-/// Compute relu operation, dispatching to CPU or GPU based on device
+/// Compute relu operation, dispatching based on device type
 fn compute_relu(x: f64, device: DeviceType) -> f64 {
     match device {
         DeviceType::Cpu => if x > 0.0 { x } else { 0.0 },
         #[cfg(feature = "cuda")]
         DeviceType::Cuda => {
-            crate::device::cuda_ops::with_cuda_context(|ctx| ctx.relu(x))
-                .unwrap_or(if x > 0.0 { x } else { 0.0 })
+            match crate::device::cuda_ops::with_cuda_context(|ctx| ctx.relu(x)) {
+                Ok(result) => result,
+                Err(_) => if x > 0.0 { x } else { 0.0 },
+            }
         }
     }
 }

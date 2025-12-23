@@ -117,9 +117,12 @@ pub fn is_cuda_available() -> bool {
 #[cfg(feature = "cuda")]
 pub mod cuda_ops {
     //! CUDA-specific operations for tensor computations.
+    //! 
+    //! Note: For scalar operations, this implementation uses CPU operations
+    //! as they are faster for single values. GPU acceleration becomes beneficial
+    //! for batch/tensor operations which could be added in future versions.
     
-    use cudarc::driver::{CudaDevice, CudaSlice, DeviceRepr, LaunchAsync, LaunchConfig};
-    use cudarc::nvrtc::Ptx;
+    use cudarc::driver::CudaDevice;
     use std::sync::Arc;
 
     /// CUDA context holder for GPU operations
@@ -134,43 +137,28 @@ pub mod cuda_ops {
             Ok(CudaContext { device })
         }
 
-        /// Allocate a scalar on the GPU
-        pub fn alloc_scalar(&self, value: f64) -> Result<CudaSlice<f64>, cudarc::driver::DriverError> {
-            self.device.htod_copy(vec![value])
-        }
-
-        /// Copy a scalar from GPU to CPU
-        pub fn copy_to_host(&self, slice: &CudaSlice<f64>) -> Result<f64, cudarc::driver::DriverError> {
-            let host = self.device.dtoh_sync_copy(slice)?;
-            Ok(host[0])
-        }
-
-        /// Perform addition on GPU: result = a + b
+        /// Perform addition: result = a + b
+        /// Note: For scalar ops, CPU is faster. GPU batching can be added for tensors.
         pub fn add(&self, a: f64, b: f64) -> Result<f64, cudarc::driver::DriverError> {
-            // For scalar operations, CPU is actually faster
-            // GPU ops are more beneficial for tensor/matrix operations
             Ok(a + b)
         }
 
-        /// Perform multiplication on GPU: result = a * b  
+        /// Perform multiplication: result = a * b  
+        /// Note: For scalar ops, CPU is faster. GPU batching can be added for tensors.
         pub fn mul(&self, a: f64, b: f64) -> Result<f64, cudarc::driver::DriverError> {
             Ok(a * b)
         }
 
-        /// Perform power on GPU: result = base^exp
+        /// Perform power: result = base^exp
+        /// Note: For scalar ops, CPU is faster. GPU batching can be added for tensors.
         pub fn pow(&self, base: f64, exp: f64) -> Result<f64, cudarc::driver::DriverError> {
             Ok(base.powf(exp))
         }
 
-        /// Perform ReLU on GPU: result = max(0, x)
+        /// Perform ReLU: result = max(0, x)
+        /// Note: For scalar ops, CPU is faster. GPU batching can be added for tensors.
         pub fn relu(&self, x: f64) -> Result<f64, cudarc::driver::DriverError> {
             Ok(if x > 0.0 { x } else { 0.0 })
-        }
-    }
-
-    impl Default for CudaContext {
-        fn default() -> Self {
-            Self::new().expect("Failed to create CUDA context")
         }
     }
 
