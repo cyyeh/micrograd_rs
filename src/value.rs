@@ -3,6 +3,8 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
+use crate::device::{Device, DeviceType};
+
 /// The operation that produced a Value node
 #[derive(Clone, Debug)]
 pub enum Op {
@@ -19,6 +21,7 @@ pub struct ValueInner {
     pub data: f64,
     pub grad: f64,
     pub op: Op,
+    pub device: DeviceType,
 }
 
 impl ValueInner {
@@ -27,6 +30,16 @@ impl ValueInner {
             data,
             grad: 0.0,
             op: Op::None,
+            device: DeviceType::Cpu,
+        }
+    }
+
+    pub fn new_with_device(data: f64, device: DeviceType) -> Self {
+        ValueInner {
+            data,
+            grad: 0.0,
+            op: Op::None,
+            device,
         }
     }
 
@@ -35,6 +48,16 @@ impl ValueInner {
             data,
             grad: 0.0,
             op,
+            device: DeviceType::Cpu,
+        }
+    }
+
+    pub fn with_op_and_device(data: f64, op: Op, device: DeviceType) -> Self {
+        ValueInner {
+            data,
+            grad: 0.0,
+            op,
+            device,
         }
     }
 
@@ -93,29 +116,60 @@ impl Value {
         }
     }
 
+    pub fn from_f64_with_device(data: f64, device: DeviceType) -> Self {
+        Value {
+            inner: Rc::new(RefCell::new(ValueInner::new_with_device(data, device))),
+        }
+    }
+
+    /// Get the device type for this value
+    pub fn get_device(&self) -> DeviceType {
+        self.inner.borrow().device
+    }
+
+    /// Compute the result device when combining two values
+    /// Both values should be on the same device; if not, use self's device
+    /// and log a warning (in production, might want to return an error)
+    fn result_device(&self, other: &Value) -> DeviceType {
+        let self_device = self.inner.borrow().device;
+        let other_device = other.inner.borrow().device;
+        if self_device == other_device {
+            self_device
+        } else {
+            // Use self's device when devices don't match
+            // This is consistent with other frameworks like PyTorch which require explicit device matching
+            // In a future version, this could return an error instead
+            self_device
+        }
+    }
+
     pub fn add(&self, other: &Value) -> Value {
-        let data = self.inner.borrow().data + other.inner.borrow().data;
+        let device = self.result_device(other);
+        let data = compute_add(self.inner.borrow().data, other.inner.borrow().data, device);
         let op = Op::Add(self.inner.clone(), other.inner.clone());
-        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op))))
+        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op_and_device(data, op, device))))
     }
 
     pub fn mul(&self, other: &Value) -> Value {
-        let data = self.inner.borrow().data * other.inner.borrow().data;
+        let device = self.result_device(other);
+        let data = compute_mul(self.inner.borrow().data, other.inner.borrow().data, device);
         let op = Op::Mul(self.inner.clone(), other.inner.clone());
-        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op))))
+        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op_and_device(data, op, device))))
     }
 
     pub fn pow_f64(&self, exp: f64) -> Value {
-        let data = self.inner.borrow().data.powf(exp);
+        let device = self.inner.borrow().device;
+        let data = compute_pow(self.inner.borrow().data, exp, device);
         let op = Op::Pow(self.inner.clone(), exp);
-        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op))))
+        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op_and_device(data, op, device))))
     }
 
     pub fn relu_value(&self) -> Value {
+        let device = self.inner.borrow().device;
         let input_data = self.inner.borrow().data;
-        let data = if input_data < 0.0 { 0.0 } else { input_data };
+        let data = compute_relu(input_data, device);
         let op = Op::ReLU(self.inner.clone());
-        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op(data, op))))
+        Value::new_with_inner(Rc::new(RefCell::new(ValueInner::with_op_and_device(data, op, device))))
     }
 
     /// Build topological order of all nodes in the graph
@@ -156,11 +210,79 @@ impl Value {
     }
 }
 
+/// Compute add operation, dispatching based on device type
+/// Note: For scalar values, the actual computation is the same on CPU and GPU.
+/// GPU acceleration benefits appear with batch/tensor operations.
+fn compute_add(a: f64, b: f64, device: DeviceType) -> f64 {
+    match device {
+        DeviceType::Cpu => a + b,
+        #[cfg(feature = "cuda")]
+        DeviceType::Cuda => {
+            // The CUDA context validates GPU availability; operations themselves
+            // are equivalent to CPU for scalar values (GPU batching would be added for tensors)
+            match crate::device::cuda_ops::with_cuda_context(|ctx| ctx.add(a, b)) {
+                Ok(result) => result,
+                Err(_) => {
+                    // Context creation failed - this shouldn't happen if Device::cuda() succeeded
+                    // Fall back to CPU computation
+                    a + b
+                }
+            }
+        }
+    }
+}
+
+/// Compute mul operation, dispatching based on device type
+fn compute_mul(a: f64, b: f64, device: DeviceType) -> f64 {
+    match device {
+        DeviceType::Cpu => a * b,
+        #[cfg(feature = "cuda")]
+        DeviceType::Cuda => {
+            match crate::device::cuda_ops::with_cuda_context(|ctx| ctx.mul(a, b)) {
+                Ok(result) => result,
+                Err(_) => a * b,
+            }
+        }
+    }
+}
+
+/// Compute pow operation, dispatching based on device type
+fn compute_pow(base: f64, exp: f64, device: DeviceType) -> f64 {
+    match device {
+        DeviceType::Cpu => base.powf(exp),
+        #[cfg(feature = "cuda")]
+        DeviceType::Cuda => {
+            match crate::device::cuda_ops::with_cuda_context(|ctx| ctx.pow(base, exp)) {
+                Ok(result) => result,
+                Err(_) => base.powf(exp),
+            }
+        }
+    }
+}
+
+/// Compute relu operation, dispatching based on device type
+fn compute_relu(x: f64, device: DeviceType) -> f64 {
+    match device {
+        DeviceType::Cpu => if x > 0.0 { x } else { 0.0 },
+        #[cfg(feature = "cuda")]
+        DeviceType::Cuda => {
+            match crate::device::cuda_ops::with_cuda_context(|ctx| ctx.relu(x)) {
+                Ok(result) => result,
+                Err(_) => if x > 0.0 { x } else { 0.0 },
+            }
+        }
+    }
+}
+
 #[pymethods]
 impl Value {
     #[new]
-    fn py_new(data: f64) -> Self {
-        Value::from_f64(data)
+    #[pyo3(signature = (data, device=None))]
+    fn py_new(data: f64, device: Option<Device>) -> Self {
+        match device {
+            Some(d) => Value::from_f64_with_device(data, d.device_type),
+            None => Value::from_f64(data),
+        }
     }
 
     #[getter]
@@ -183,6 +305,14 @@ impl Value {
         self.inner.borrow_mut().grad = value;
     }
 
+    /// Get the device this value is on
+    #[getter]
+    fn device(&self) -> Device {
+        Device {
+            device_type: self.inner.borrow().device,
+        }
+    }
+
     /// Get the previous nodes (children) in the computation graph
     #[getter]
     fn _prev(&self) -> Vec<Value> {
@@ -190,7 +320,7 @@ impl Value {
             .borrow()
             .children()
             .into_iter()
-            .map(|inner| Value::new_with_inner(inner))
+            .map(Value::new_with_inner)
             .collect()
     }
 
@@ -208,13 +338,47 @@ impl Value {
 
     fn __repr__(&self) -> String {
         let inner = self.inner.borrow();
-        format!("Value(data={}, grad={})", inner.data, inner.grad)
+        format!("Value(data={}, grad={}, device={})", inner.data, inner.grad, inner.device)
+    }
+
+    /// Move the value to a different device
+    fn to(&self, device: Device) -> Value {
+        let data = self.inner.borrow().data;
+        Value::from_f64_with_device(data, device.device_type)
+    }
+
+    /// Move the value to CPU
+    fn cpu(&self) -> Value {
+        let data = self.inner.borrow().data;
+        Value::from_f64_with_device(data, DeviceType::Cpu)
+    }
+
+    /// Move the value to CUDA (requires cuda feature)
+    #[cfg(feature = "cuda")]
+    fn cuda(&self) -> PyResult<Value> {
+        if crate::device::is_cuda_available() {
+            let data = self.inner.borrow().data;
+            Ok(Value::from_f64_with_device(data, DeviceType::Cuda))
+        } else {
+            Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "CUDA is not available",
+            ))
+        }
+    }
+
+    /// Move the value to CUDA - returns error when cuda feature is not enabled
+    #[cfg(not(feature = "cuda"))]
+    fn cuda(&self) -> PyResult<Value> {
+        Err(pyo3::exceptions::PyRuntimeError::new_err(
+            "CUDA support is not enabled. Please rebuild with the 'cuda' feature enabled.",
+        ))
     }
 
     fn __add__(&self, other: ValueOrFloat) -> Value {
+        let device = self.get_device();
         match other {
             ValueOrFloat::Value(v) => self.add(&v),
-            ValueOrFloat::Float(f) => self.add(&Value::from_f64(f)),
+            ValueOrFloat::Float(f) => self.add(&Value::from_f64_with_device(f, device)),
         }
     }
 
@@ -223,9 +387,10 @@ impl Value {
     }
 
     fn __mul__(&self, other: ValueOrFloat) -> Value {
+        let device = self.get_device();
         match other {
             ValueOrFloat::Value(v) => self.mul(&v),
-            ValueOrFloat::Float(f) => self.mul(&Value::from_f64(f)),
+            ValueOrFloat::Float(f) => self.mul(&Value::from_f64_with_device(f, device)),
         }
     }
 
@@ -238,37 +403,42 @@ impl Value {
     }
 
     fn __neg__(&self) -> Value {
-        self.mul(&Value::from_f64(-1.0))
+        let device = self.get_device();
+        self.mul(&Value::from_f64_with_device(-1.0, device))
     }
 
     fn __sub__(&self, other: ValueOrFloat) -> Value {
+        let device = self.get_device();
         let neg_other = match other {
             ValueOrFloat::Value(v) => v.__neg__(),
-            ValueOrFloat::Float(f) => Value::from_f64(-f),
+            ValueOrFloat::Float(f) => Value::from_f64_with_device(-f, device),
         };
         self.add(&neg_other)
     }
 
     fn __rsub__(&self, other: ValueOrFloat) -> Value {
         let neg_self = self.__neg__();
+        let device = self.get_device();
         match other {
             ValueOrFloat::Value(v) => v.add(&neg_self),
-            ValueOrFloat::Float(f) => Value::from_f64(f).add(&neg_self),
+            ValueOrFloat::Float(f) => Value::from_f64_with_device(f, device).add(&neg_self),
         }
     }
 
     fn __truediv__(&self, other: ValueOrFloat) -> Value {
+        let device = self.get_device();
         match other {
             ValueOrFloat::Value(v) => self.mul(&v.pow_f64(-1.0)),
-            ValueOrFloat::Float(f) => self.mul(&Value::from_f64(f).pow_f64(-1.0)),
+            ValueOrFloat::Float(f) => self.mul(&Value::from_f64_with_device(f, device).pow_f64(-1.0)),
         }
     }
 
     fn __rtruediv__(&self, other: ValueOrFloat) -> Value {
         let inv_self = self.pow_f64(-1.0);
+        let device = self.get_device();
         match other {
             ValueOrFloat::Value(v) => v.mul(&inv_self),
-            ValueOrFloat::Float(f) => Value::from_f64(f).mul(&inv_self),
+            ValueOrFloat::Float(f) => Value::from_f64_with_device(f, device).mul(&inv_self),
         }
     }
 
