@@ -39,7 +39,8 @@ A **Tensor** is a multi-dimensional array of numbers. Think of it as a generaliz
 
 ### Tensor Structure in the Codebase
 
-```23:29:/home/cyyeh/repos/rust-py-bindings/micrograd_rs/src/tensor.rs
+```rust
+//23:29:micrograd_rs/src/tensor.rs
 /// A tensor view into a flat storage buffer.
 ///
 /// - `shape`: lengths per dimension
@@ -77,7 +78,8 @@ t.transpose(0, 1)  # shape [3, 2], strides [1, 3] - NO data copy!
 
 ### The Device Abstraction
 
-```9:17:/home/cyyeh/repos/rust-py-bindings/micrograd_rs/src/device.rs
+```rust
+//9:17:micrograd_rs/src/device.rs
 /// Represents the compute device where operations are executed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum DeviceType {
@@ -106,7 +108,8 @@ pub enum DeviceType {
 
 ## ⚡ Key Concept 3: How Data Moves Between CPU & GPU
 
-```168:173:/home/cyyeh/repos/rust-py-bindings/micrograd_rs/src/tensor.rs
+```rust
+//168:173:micrograd_rs/src/tensor.rs
 #[derive(Clone, Debug)]
 pub enum TensorData {
     Cpu(Arc<Vec<f32>>),
@@ -135,17 +138,18 @@ tensor.to(Device.cuda())
 
 **⚠️ Important:** Data transfers between CPU↔GPU are *expensive*! The project avoids implicit transfers:
 
-```496:505:/home/cyyeh/repos/rust-py-bindings/micrograd_rs/src/tensor.rs
-    fn ensure_same_device(&self, other: &Tensor) -> PyResult<DeviceType> {
-        let a = self.device_type();
-        let b = other.device_type();
-        if a != b {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "tensors must be on the same device (no implicit device transfers)",
-            ));
-        }
-        Ok(a)
+```rust
+//496:505:micrograd_rs/src/tensor.rs
+fn ensure_same_device(&self, other: &Tensor) -> PyResult<DeviceType> {
+    let a = self.device_type();
+    let b = other.device_type();
+    if a != b {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "tensors must be on the same device (no implicit device transfers)",
+        ));
     }
+    Ok(a)
+}
 ```
 
 ---
@@ -160,7 +164,8 @@ A **kernel** is a small program that runs on the GPU. Each GPU core executes the
 
 The CPU version iterates through elements:
 
-```52:77:/home/cyyeh/repos/rust-py-bindings/micrograd_rs/src/cpu_kernels.rs
+```rust
+//52:77:micrograd_rs/src/cpu_kernels.rs
 /// Elementwise binary op on two same-shaped tensors (no broadcasting), producing a contiguous output.
 pub fn cpu_ew_binary(
     out: &mut [f32],
@@ -178,7 +183,8 @@ pub fn cpu_ew_binary(
 
 The GPU version runs **in parallel** across thousands of threads:
 
-```14:21:/home/cyyeh/repos/rust-py-bindings/micrograd_rs/src/cuda_kernels.rs
+```rust
+//14:21:micrograd_rs/src/cuda_kernels.rs
 const KERNEL_SRC: &str = r#"
 extern "C" __global__ void ew_add_f32(float* out, const float* a, const float* b, unsigned int n) {
     unsigned int idx = (unsigned int)(blockIdx.x * blockDim.x + threadIdx.x);
@@ -218,7 +224,8 @@ Each thread computes: `idx = blockIdx * blockDim + threadIdx` to get its unique 
 
 ### The Computation Graph
 
-```182:190:/home/cyyeh/repos/rust-py-bindings/micrograd_rs/src/tensor.rs
+```rust
+//182:190:micrograd_rs/src/tensor.rs
 #[derive(Clone, Debug)]
 pub enum TensorOp {
     None,
