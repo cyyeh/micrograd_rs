@@ -81,6 +81,27 @@ cpu_device = Device.cpu()
 d = c.to(cpu_device)
 ```
 
+### Tensor (ND, strided views) (experimental)
+
+`Tensor` is an N-D tensor type with a shape/strides view model. It supports basic batched ops and autograd.
+
+```python
+from micrograd_rs import Tensor, Device
+
+x = Tensor([[1.0, -2.0], [3.0, 4.0]], device=Device.cpu())
+y = (x.relu() * x).sum()
+y.backward()
+print(x.grad.tolist())  # [[2.0, 0.0], [6.0, 8.0]]
+
+# Views:
+t = Tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+print(t.transpose(0, 1).tolist())  # [[1,4],[2,5],[3,6]]
+```
+
+Notes:
+- No broadcasting yet: elementwise ops require equal shapes.
+- CUDA kernels currently support contiguous tensors; non-contiguous views are materialized via `.contiguous()`.
+
 ## Neural Networks
 
 ```python
@@ -113,6 +134,7 @@ To compare CPU vs GPU performance:
 
 ```bash
 poetry run python benchmarks/benchmark_device.py
+poetry run python benchmarks/benchmark_tensor_nd.py
 ```
 
 The benchmark script measures various operations including:

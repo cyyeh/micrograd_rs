@@ -122,20 +122,22 @@ pub mod cuda_ops {
     //! as they are faster for single values. GPU acceleration becomes beneficial
     //! for batch/tensor operations which could be added in future versions.
     
-    use cudarc::driver::CudaContext;
+    use cudarc::driver::{CudaContext, CudaStream};
     use std::sync::Arc;
 
     /// CUDA context holder for GPU operations
     #[allow(dead_code)]
     pub struct CudaContextHolder {
         pub context: Arc<CudaContext>,
+        pub stream: Arc<CudaStream>,
     }
 
     impl CudaContextHolder {
         /// Create a new CUDA context on device 0
         pub fn new() -> Result<Self, cudarc::driver::DriverError> {
             let context = CudaContext::new(0)?;
-            Ok(CudaContextHolder { context })
+            let stream = context.default_stream();
+            Ok(CudaContextHolder { context, stream })
         }
 
         /// Perform addition: result = a + b
@@ -192,6 +194,16 @@ pub mod cuda_ops {
             }
             f(ctx_ref.as_ref().unwrap())
         })
+    }
+
+    /// Execute a function with access to the cached CUDA stream.
+    ///
+    /// This is the preferred entry point for Tensor allocations/copies/kernels.
+    pub fn with_cuda_stream<F, R>(f: F) -> Result<R, cudarc::driver::DriverError>
+    where
+        F: FnOnce(&Arc<CudaStream>) -> Result<R, cudarc::driver::DriverError>,
+    {
+        with_cuda_context(|ctx| f(&ctx.stream))
     }
 }
 

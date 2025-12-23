@@ -140,7 +140,3 @@ micrograd_rs/
 
 - Create `ValueInner` struct with `data`, `grad`, `_prev`, `_op`, and backward closure
 - Use `Rc<RefCell<ValueInner>>` for shared ownership in computational graph
-- Implement all arithmetic operations with gradient computation
-- Implement topological sort for `backward()`
-
-### Phase 3: Python Bindings for Value
