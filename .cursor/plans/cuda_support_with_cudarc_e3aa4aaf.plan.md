@@ -176,6 +176,3 @@ poetry run maturin develop --features cuda
 
 1. **Scalar Operations Only:** GPU kernels not beneficial for single values
 2. **No Tensor Support:** True GPU acceleration requires batched operations
-3. **CPU Fallback:** CUDA path performs CPU math (context validates GPU access)
-
-## Future Enhancements (Not in Scope)

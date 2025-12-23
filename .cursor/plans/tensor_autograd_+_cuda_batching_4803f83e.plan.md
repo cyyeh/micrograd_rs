@@ -171,8 +171,3 @@ Implement identical ops using Rust loops over `Vec<f32>`.
 - Existing scalar `Value` tests still pass unchanged.
 
 ## Implementation todos
-
-- **tensor-core**: Implement `TensorInner`, storage enum (CPU/CUDA), basic constructors, device transfer, and `.tolist()`.
-- **tensor-ops-fwd**: Implement forward ops `add/mul/pow/relu/sum` with CPU paths.
-- **cuda-kernels**: Add cudarc kernel loading + PTX and CUDA forward paths for elementwise + reduction.
-- **tensor-autograd**: Implement topo sort + backward for `TensorOp` using CPU/CUDA batched kernels and grad accumulation.

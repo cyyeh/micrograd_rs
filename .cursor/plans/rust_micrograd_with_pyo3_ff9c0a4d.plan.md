@@ -135,8 +135,3 @@ micrograd_rs/
 - Initialize Cargo project with PyO3 and maturin
 - Configure `Cargo.toml` with dependencies: `pyo3`, `rand`
 - Create `pyproject.toml` for Python packaging
-
-### Phase 2: Value Implementation
-
-- Create `ValueInner` struct with `data`, `grad`, `_prev`, `_op`, and backward closure
-- Use `Rc<RefCell<ValueInner>>` for shared ownership in computational graph
