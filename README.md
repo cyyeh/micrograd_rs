@@ -1,8 +1,6 @@
 # micrograd_rs
 
-A tiny autograd engine implemented in Rust with Python bindings via PyO3.
-
-This is a Rust reimplementation of [Andrej Karpathy's micrograd](https://github.com/karpathy/micrograd).
+A tiny torch-like engine implemented in Rust with Python bindings via PyO3.
 
 ## Installation
 
@@ -146,3 +144,6 @@ The benchmark script measures various operations including:
 When CUDA is available, it compares CPU and GPU performance and shows speedup ratios.
 
 
+## References
+
+- [Andrej Karpathy's micrograd](https://github.com/karpathy/micrograd)
