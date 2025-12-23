@@ -9,7 +9,12 @@ license = "MIT"
 name = "micrograd_rs"
 crate-type = ["cdylib"]
 
+[features]
+default = []
+cuda = ["cudarc"]
+
 [dependencies]
 pyo3 = { version = "0.22", features = ["extension-module"] }
 rand = "0.8"
+cudarc = { version = "0.18", optional = true, features = ["cuda-version-from-build-system"] }
 

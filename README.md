@@ -12,6 +12,20 @@ poetry install
 poetry run maturin develop
 ```
 
+### GPU Support (NVIDIA CUDA)
+
+To enable GPU support for NVIDIA GPUs via CUDA, build with the `cuda` feature:
+
+```bash
+# Build with CUDA support
+poetry run maturin develop --features cuda
+```
+
+**Requirements for CUDA support:**
+- NVIDIA GPU with CUDA capability
+- CUDA Toolkit installed (11.x or 12.x)
+- `nvcc` available in PATH
+
 ## Usage
 
 ```python
@@ -33,6 +47,38 @@ print(f'{g.data:.4f}')  # prints 24.7041
 g.backward()
 print(f'{a.grad:.4f}')  # prints 138.8338
 print(f'{b.grad:.4f}')  # prints 645.5773
+```
+
+### Device Selection
+
+You can specify which device (CPU or GPU) to use for computations:
+
+```python
+from micrograd_rs import Value, Device
+
+# Check if CUDA is available
+if Device.is_cuda_available():
+    device = Device.cuda()
+    print("Using CUDA GPU")
+else:
+    device = Device.cpu()
+    print("Using CPU")
+
+# Create values on a specific device
+a = Value(2.0, device=device)
+b = Value(3.0, device=device)
+
+# Operations preserve device placement
+c = a + b  # c is on the same device as a and b
+print(f"Result: {c.data}, Device: {c.device}")
+
+# Move values between devices
+cpu_val = c.cpu()  # Move to CPU
+# cuda_val = c.cuda()  # Move to CUDA (if available)
+
+# Use the .to() method for explicit device transfer
+cpu_device = Device.cpu()
+d = c.to(cpu_device)
 ```
 
 ## Neural Networks
